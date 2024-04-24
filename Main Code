@@ -1,0 +1,699 @@
+#include <iostream>
+#include <fstream>
+#include <cctype>
+#include <iomanip>
+#include <string>
+#include <chrono>
+#include <thread>
+#include <set>
+
+using namespace std;
+
+const int maxName = 50;
+const int maxMoney = 7;
+const int maxNumber = 12;
+const int typeSize = 4;
+const int pinSize = 4;
+const int ssnLastFourSize = 4;
+const string sep = " |";
+const int totalLen = maxName + maxNumber + typeSize + maxMoney + pinSize + ssnLastFourSize + sep.size() * 6;
+const string sepLine = sep + string(totalLen - 1, '=') + '|';
+
+class Bank {
+private:
+    unsigned long long account_number;
+    char holder_name[51];
+    int deposit;
+    char type;
+    int pin;
+    int ssn_last_four;
+public:
+    void System_clear();
+    void Get_Data();
+    void Write_Data();
+    void deposit_withdraw(unsigned long long acc_num, int option);
+    bool verifyPIN(int enteredPIN) const;
+    void Display_Invidual_Records(unsigned long long n);
+    void report() const;
+    void Show_account() const;
+    void dep(int);
+    void draw(int x);
+    unsigned long long retacno() const;
+    int retdeposit() const;
+    char rettype() const;
+    void Modification_data();
+    static bool isAccountNumberUnique(unsigned long long accNum);
+    bool verifyPIN() const;
+    void Delete_Account(unsigned long long n);
+    void Account_Modification(unsigned long long n);
+};
+
+bool Bank::isAccountNumberUnique(unsigned long long accNum) {
+    ifstream inFile("account.dat", ios::binary);
+    Bank temp{};
+    while (inFile.read(reinterpret_cast<char*>(&temp), sizeof(Bank))) {
+        if (temp.account_number == accNum) {
+            inFile.close();
+            return false;
+        }
+    }
+    inFile.close();
+    return true;
+}
+
+bool Bank::verifyPIN() const
+{
+    return false;
+}
+
+void Bank::Get_Data() {
+    cout << "\n\n===========CREATE BANK ACCOUNT===========\n\n";
+    do {
+        cout << "\nEnter the Account Number:";
+        cin >> account_number;
+        if ((int)to_string(account_number).size() != 12) {
+            cout << "The account number has to be of 12 digits. Please try again.\n";
+            continue;
+        }
+        if (!isAccountNumberUnique(account_number)) {
+            cout << "This account number already exists. Please choose another one.\n";
+            continue;
+        }
+        break;
+    } while (true);
+
+    cout << "\n\nEnter Account Holder Name: ";
+    cin.clear();
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    cin.getline(holder_name, maxName);
+    cout << "\nWhich type of Account \n[S for Saving Account] (or)[C for Checking]: ";
+    cin >> type;
+    type = toupper(type);
+    while (type != 'S' && type != 'C') {
+        cout << "Please enter either S or C to avoid data corruption: ";
+        cin.clear();
+        fflush(stdin);
+        cin >> type;
+        type = toupper(type);
+    }
+    if (type == 'S') {
+        cout << "\nEnter the Initial Amount for Saving Account: ";
+        cin >> deposit;
+        while (deposit >= 1000000) {
+            cout << "Maximum money is 1000000/-\nPlease try again: ";
+            cin >> deposit;
+        }
+        cout << "\n\nAccount has been Created Successfully.";
+    }
+    else if (type == 'C') {
+        cout << "\nEnter the Initial Amount for Checking Account: ";
+        cin >> deposit;
+        while (deposit >= 1000000) {
+            cout << "Maximum money is 1000000/-\nPlease try again: ";
+            cin >> deposit;
+        }
+        cout << "\n\nAccount has been Created Successfully.";
+    }
+
+    cout << "\nEnter the last four digits of your social security number: ";
+    do {
+        cin >> ssn_last_four;
+        if (ssn_last_four < 1000 || ssn_last_four > 9999) {
+            cout << "Invalid input. Please enter the last four digits of your social security number: ";
+            continue;
+        }
+        break;
+    } while (true);
+
+    cout << "\nEnter a 4-digit PIN number: ";
+    do {
+        cin >> pin;
+        if (pin < 1000 || pin > 9999) {
+            cout << "Invalid PIN. Please enter a 4-digit number: ";
+            continue;
+        }
+        break;
+    } while (true);
+}
+
+void Bank::Write_Data() {
+    ofstream outFile;
+    outFile.open("account.dat", ios::binary | ios::app);
+    Get_Data();
+    outFile.write((char*)this, sizeof(*this));
+    outFile.close();
+}
+
+void Bank::deposit_withdraw(unsigned long long acc_num, int option) {
+    int amount;
+    int enteredPIN;
+    bool found = false;
+    fstream file;
+    file.open("account.dat", ios::binary | ios::in | ios::out);
+    if (!file) {
+        cout << "An Error Occurred. Please try again.";
+        return;
+    }
+    while (!file.eof() && !found) {
+        file.read((char*)this, sizeof(*this));
+        if (account_number == acc_num) {
+            found = true;
+            while (true) {
+                cout << "\nEnter your pin for further access: ";
+                cin >> enteredPIN;
+                if (verifyPIN(enteredPIN))
+                    break; // Exit loop if PIN matches
+                cout << "Invalid PIN number. Try again." << endl;
+            }
+
+            switch (option) {
+            case 1:
+                cout << "\n\n===========DEPOSIT TO ACCOUNT===========";
+                cout << "\n\nEnter the Amount: ";
+                cin >> amount;
+                if (amount <= 0) {
+                    cout << "Invalid amount. Please enter a positive value.";
+                    break;
+                }
+                deposit += amount;
+                cout << "\nDeposit Successful.";
+                break;
+            case 2:
+                cout << "\n\n===========WITHDRAW FROM ACCOUNT===========";
+                cout << "\n\nEnter the Amount: ";
+                cin >> amount;
+                if (amount <= 0) {
+                    cout << "Invalid amount. Please enter a positive value.";
+                    break;
+                }
+                if (amount > deposit) {
+                    cout << "Insufficient Balance. Cannot withdraw.";
+                    break;
+                }
+                deposit -= amount;
+                cout << "\nWithdrawal Successful.";
+                break;
+            default:
+                cout << "Invalid option.";
+            }
+            cout << "\nCurrent Balance: " << deposit;
+            int pos = -static_cast<int>(sizeof(*this));
+            file.seekp(pos, ios::cur);
+            file.write((char*)this, sizeof(*this));
+        }
+    }
+    file.close();
+    if (!found)
+        cout << "\nAccount not found.";
+}
+
+bool Bank::verifyPIN(int enteredPIN) const {
+    return pin == enteredPIN;
+}
+
+void Bank::Modification_data() {
+    cout << "\nAccount No: " << account_number;
+    cout << "\nModify Type of Account : ";
+    cin.clear();
+    fflush(stdin);
+    cin >> type;
+    type = toupper(type);
+    cout << "\nModify Total Balance Amount : ";
+    cin >> deposit;
+    while (deposit >= 1000000) {
+        cout << "Maximum money is 1000000/-\nPlease try again: ";
+        cin >> deposit;
+    }
+
+    char modifyName;
+    cout << "\nDo you want to modify the Account Holder Name? (Y/N): ";
+    cin >> modifyName;
+    if (toupper(modifyName) == 'Y') {
+        cout << "\nModify Account Holder Name: ";
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cin.getline(holder_name, 51);
+    }
+
+    int enteredPIN;
+    int enteredSSN;
+
+    while (true) {
+        cout << "\nVerify your PIN number to proceed with modifications: ";
+        cin >> enteredPIN;
+        if (verifyPIN(enteredPIN))
+            break;
+        cout << "Invalid PIN number. Try again." << endl;
+    }
+
+    while (true) {
+        cout << "\nEnter the last four digits of your social security number to verify your account: ";
+        cin >> enteredSSN;
+        if (enteredSSN == ssn_last_four)
+            break;
+        cout << "Incorrect social security number. Try again." << endl;
+    }
+
+    int newPIN;
+    cout << "\nDo you want to modify the PIN? (Y/N): ";
+    char modifyPIN;
+    cin >> modifyPIN;
+    if (toupper(modifyPIN) == 'Y') {
+        cout << "\nEnter the new 4-digit PIN number: ";
+        do {
+            cin >> newPIN;
+            if (newPIN < 1000 || newPIN > 9999) {
+                cout << "Invalid PIN. Please enter a 4-digit number: ";
+                continue;
+            }
+            break;
+        } while (true);
+        pin = newPIN;
+    }
+
+    cout << "\n\nModifications have been done successfully.";
+    this_thread::sleep_for(chrono::seconds(2));
+}
+
+void Bank::Display_Invidual_Records(unsigned long long n) {
+    bool flag = false;
+    ifstream inFile;
+    inFile.open("account.dat", ios::binary);
+    if (!inFile) {
+        cout << "\n\nAn Error Occurred. Please try again.";
+        return;
+    }
+    cout << "\nBalance Record:\n";
+    while (inFile.read((char*)this, sizeof(*this))) {
+        if (retacno() == n) {
+            Show_account();
+            flag = true;
+        }
+    }
+    inFile.close();
+    if (flag == false)
+        cout << "\n\nAccounts Details not Found.";
+}
+void Bank::report() const {
+    cout << sep <<
+        setw(maxNumber) << account_number << sep <<
+        setw(maxName) << holder_name << sep <<
+        setw(typeSize) << type << sep <<
+        setw(maxMoney) << deposit << sep <<
+        setw(pinSize) << pin << sep <<
+        setw(ssnLastFourSize) << ssn_last_four << sep << endl << sepLine << endl;
+}
+
+void Bank::dep(int x) {
+    deposit = deposit + x;
+}
+
+void Bank::draw(int x) {
+    deposit -= x;
+}
+
+void Bank::Show_account() const {
+    cout << "\nAccount No: " << account_number;
+    cout << "\nAccount Holder Name: " << holder_name;
+    if (type == 'S') {
+        cout << "\nType of Account: Saving ";
+    }
+    else {
+        cout << "\nType of Account: Checking ";
+    }
+    cout << "\nTotal Balance: " << deposit;
+}
+
+unsigned long long Bank::retacno() const {
+    return account_number;
+}
+
+int Bank::retdeposit() const {
+    return deposit;
+}
+
+char Bank::rettype() const {
+    return type;
+}
+
+void Bank::System_clear() {
+    system("cls");
+}
+
+void Bank::Account_Modification(unsigned long long n) {
+    Bank call{};
+    bool found = false;
+    fstream File;
+    File.open("account.dat", ios::binary | ios::in | ios::out);
+    if (!File) {
+        cout << "An Error Occurred. Please try again.";
+        return;
+    }
+    while (!File.eof() && found == false) {
+        long long pos = File.tellg();
+        File.read((char*)&call, sizeof(Bank));
+        if (call.retacno() == n) {
+            call.Show_account();
+
+            int enteredPIN;
+            int enteredSSN;
+
+           
+            while (true) {
+                cout << "\nPlease verify your PIN number to proceed with modifications: ";
+                cin >> enteredPIN;
+                if (call.verifyPIN(enteredPIN))
+                    break;
+                cout << "Invalid PIN number. Try again." << endl;
+            }
+
+            while (true) {
+                cout << "\nEnter the last four digits of your social security number to verify your account: ";
+                cin >> enteredSSN;
+                if (enteredSSN == call.ssn_last_four)
+                    break;
+                cout << "Incorrect social security number. Try again." << endl;
+            }
+
+            cout << "\n\n===========MODIFY ACCOUNT===========";
+            cout << "\nNew Details of the Account: " << endl;
+            call.Modification_data();
+            File.seekp(pos);
+            File.write((char*)&call, sizeof(Bank));
+            found = true;
+            break;
+        }
+    }
+    File.close();
+    if (found == false)
+        cout << "\n\n Record Not Found.";
+}
+
+void Bank::Delete_Account(unsigned long long n) {
+    ifstream inFile("account.dat", ios::binary);
+    ofstream outFile("temp.dat", ios::binary);
+    Bank temp{};
+    bool found = false;
+    while (inFile.read(reinterpret_cast<char*>(&temp), sizeof(Bank))) {
+        if (temp.retacno() != n) {
+            outFile.write(reinterpret_cast<char*>(&temp), sizeof(Bank));
+        }
+        else {
+            found = true;
+        }
+    }
+    inFile.close();
+    outFile.close();
+    remove("account.dat");
+    rename(R"(temp.dat)", R"(account.dat)");
+    if (found)
+        cout << "Account deleted successfully." << endl;
+    else
+        cout << "Account not found." << endl;
+}
+
+static void pause(int milliseconds) {
+    this_thread::sleep_for(chrono::milliseconds(milliseconds));
+}
+
+void Get_All_Data() {
+    Bank call{};
+    ifstream inFile;
+    inFile.open("account.dat", ios::binary);
+    if (!inFile) {
+        cout << "An Error Occurred. Please try again.";
+        return;
+    }
+    cout << "\n\n\t\tACCOUNT HOLDER LIST\n\n";
+    cout << sepLine << endl << sep <<
+        setw(maxNumber) << "A/C NO." << sep <<
+        setw(maxName) << "NAME" << sep <<
+        setw(typeSize) << "TYPE" << sep <<
+        setw(maxMoney) << "BALANCE" << sep <<
+        setw(pinSize) << "PIN" << sep <<
+        setw(ssnLastFourSize) << "SSN Last 4" << sep << endl <<
+        sepLine << endl;
+    while (inFile.read((char*)&call, sizeof(Bank))) {
+        call.report();
+    }
+    inFile.close();
+}
+
+static void system_clear() {
+    system("cls");
+}
+
+static void Credit() {
+}
+
+int main() {
+    char choice;
+    unsigned long long account_number;
+    Bank call{};
+    Credit();
+    do {
+        system_clear();
+        cout << "\n===========================";
+        cout << "\n  BANKING RECORD SYSTEM";
+        cout << "\n===========================\n\n";
+        cout << "\n\n01. CREATE NEW ACCOUNT";
+        cout << "\n\n02. BALANCE INQUIRY OF ACCOUNT";
+        cout << "\n\n03. DEPOSIT IN ACCOUNT";
+        cout << "\n\n04. WITHDRAW FROM ACCOUNT";
+        cout << "\n\n05. CLOSE AN ACCOUNT (Admin)";
+        cout << "\n\n06. VIEW ALL ACCOUNTS (Admin)";
+        cout << "\n\n07. MODIFY AN ACCOUNT (Admin)";
+        cout << "\n\n08. EXIT FROM PROGRAM";
+        cout << "\n\nSELECT THE OPTION: ";
+        cin >> choice;
+        system_clear();
+        switch (choice) {
+        case '1':
+            call.Write_Data();
+            cout << "\nAccount created successfully. Press 'Enter' to return to main menu...";
+            cin.ignore();
+            pause(1000);
+            break;
+        case '2':
+            cout << "\n\nWelcome to the balance display selection!";
+            do {
+                cout << "\n\nAccount No: ";
+                cin >> account_number;
+                if (!Bank::isAccountNumberUnique(account_number)) {
+                    call.Display_Invidual_Records(account_number); // First call
+                    break;
+                }
+                else {
+                    char tryAgain;
+                    cout << "Account with number " << account_number << " does not exist. Do you want to try again? (Y/N): ";
+                    cin >> tryAgain;
+                    if (toupper(tryAgain) != 'Y') {
+                        break;
+                    }
+                }
+            } while (true);
+            cout << "\nPress 'Enter' to return back to main menu...";
+            cin.ignore();
+            break;
+        case '3':
+            cout << "\n\nWelcome to the deposit selection!\n";
+            do {
+                cout << "\n\nAccount No: ";
+                cin >> account_number;
+                if (!Bank::isAccountNumberUnique(account_number)) {
+                    call.deposit_withdraw(account_number, 1); // Deposit option
+                    break;
+                }
+                else {
+                    char tryAgain;
+                    cout << "Account with number " << account_number << " does not exist. Do you want to try again? (Y/N): ";
+                    cin >> tryAgain;
+                    if (toupper(tryAgain) != 'Y') {
+                        break;
+                    }
+                }
+            } while (true);
+            cout << "\nPress 'Enter' to return to main menu...";
+            cin.ignore();
+            break;
+        case '4':
+            cout << "\n\nWelcome to the withdrawal selection!\n";
+            do {
+                cout << "\n\nAccount No: ";
+                cin >> account_number;
+                if (!Bank::isAccountNumberUnique(account_number)) {
+                    call.deposit_withdraw(account_number, 2); // Withdrawal option
+                    break;
+                }
+                else {
+                    char tryAgain;
+                    cout << "Account with number " << account_number << " does not exist. Do you want to try again? (Y/N): ";
+                    cin >> tryAgain;
+                    if (toupper(tryAgain) != 'Y') {
+                        break;
+                    }
+                }
+            } while (true);
+            cout << "\nPress 'Enter' to return to main menu...";
+            cin.ignore();
+            break;
+        case '5': {
+            int adminPINAttempts = 3;
+            int adminPIN;
+            bool adminAccess = false;
+
+            do {
+                cout << "\nEnter the admin PIN to delete an account: ";
+                cin >> adminPIN;
+
+                if (adminPIN != 6646) {
+                    cout << "Incorrect admin PIN. " << adminPINAttempts - 1 << " attempts remaining." << endl;
+                    adminPINAttempts--;
+
+                    if (adminPINAttempts == 0) {
+                        cout << "Too many incorrect attempts. Access denied." << endl;
+                        pause(2000);
+                        break;
+                    }
+                }
+                else {
+                    adminAccess = true;
+                    break;
+                }
+            } while (!adminAccess);
+
+            if (adminAccess) {
+                bool proceed = false;
+
+                do {
+                    unsigned long long accountNumToDelete;
+                    cout << "\nEnter the account number you want to delete: ";
+                    cin >> accountNumToDelete;
+
+                    if (!Bank::isAccountNumberUnique(accountNumToDelete)) {
+                        string confirmation;
+                        do {
+                            cout << "\nAre you sure you want to delete the account with number " << accountNumToDelete << "? (Y/N): ";
+                            cin >> confirmation;
+
+                            if (confirmation == "y" || confirmation == "Y") {
+                                call.Delete_Account(accountNumToDelete);
+                                proceed = true;
+                            }
+                            else if (confirmation == "n" || confirmation == "N") {
+                                cout << "\nAccount deletion canceled." << endl;
+                                proceed = true;
+                            }
+                            else {
+                                cout << "Invalid input. Please enter 'Y' or 'N'." << endl;
+                            }
+                        } while (confirmation != "y" && confirmation != "Y" && confirmation != "n" && confirmation != "N");
+                    }
+                    else {
+                        cout << "Account with number " << accountNumToDelete << " does not exist." << endl;
+                    }
+                } while (!proceed);
+            }
+
+            cout << "\nPress 'Enter' to return to main menu...";
+            cin.ignore();
+            break;
+        }
+        case '6':
+        {
+            int adminPINAttempts = 3;
+            int adminPIN;
+            bool adminAccess = false;
+
+            do {
+                cout << "\nEnter the admin PIN to proceed: ";
+                cin >> adminPIN;
+
+                if (adminPIN != 6646) {
+                    cout << "Incorrect admin PIN. " << adminPINAttempts - 1 << " attempts remaining." << endl;
+                    adminPINAttempts--;
+
+                    if (adminPINAttempts == 0) {
+                        cout << "Too many incorrect attempts. Access denied." << endl;
+                        pause(2000);
+                        break;
+                    }
+                }
+                else {
+                    adminAccess = true;
+                    break;
+                }
+            } while (!adminAccess);
+
+            if (adminAccess) {
+                Get_All_Data();
+            }
+
+            cout << "\nPress 'Enter' to return to main menu...";
+            cin.ignore();
+            break;
+        }
+        case '7': {
+            int adminPINAttempts = 3;
+            int adminPIN;
+            bool adminAccess = false;
+
+            do {
+                cout << "\nEnter the admin PIN to proceed: ";
+                cin >> adminPIN;
+
+                if (adminPIN != 6646) {
+                    cout << "Incorrect admin PIN. " << adminPINAttempts - 1 << " attempts remaining." << endl;
+                    adminPINAttempts--;
+
+                    if (adminPINAttempts == 0) {
+                        cout << "Too many incorrect attempts. Access denied." << endl;
+                        pause(2000);
+                        break;
+                    }
+                }
+                else {
+                    adminAccess = true;
+                    break;
+                }
+            } while (!adminAccess);
+
+            if (adminAccess) {
+                bool proceed = false;
+                unsigned long long account_number;
+
+                do {
+                    cout << "\nEnter the account number you want to modify: ";
+                    cin >> account_number;
+
+                    if (!Bank::isAccountNumberUnique(account_number)) {
+                        call.Account_Modification(account_number);
+                        proceed = true;
+                    }
+                    else {
+                        char tryAgain;
+                        cout << "Account with number " << account_number << " does not exist. Do you want to try again? (Y/N): ";
+                        cin >> tryAgain;
+                        if (toupper(tryAgain) != 'Y') {
+                            proceed = true;
+                        }
+                    }
+                } while (!proceed);
+            }
+
+            cout << "\nTo return to main menu press 'Enter' to continue...";
+            cin.ignore();
+            break;
+        }
+
+        case '8':
+            cout << "\n\nThanks for using Banking Record System:)";
+            break;
+        default:
+            cout << "\n\nInvalid choice. Please try again.";
+        }
+        cin.ignore();
+    } while (choice != '8');
+    return 0;
+}
+
